@@ -18,11 +18,19 @@ model_params = {
         "max": 10,
         "step": 1,
     },
+    "trait_precision_decimals": {
+        "type": "SliderInt",
+        "value": 5,
+        "label": "Trait / preference decimal places",
+        "min": 0,
+        "max": 8,
+        "step": 1,
+    },
 
     # Energy Economy
     "move_cost": {
         "type": "SliderFloat",
-        "value": 0.01,
+        "value": 0.006,
         "label": "Movement Energy Cost",
         "min": 0.0,
         "max": 0.1,
@@ -54,6 +62,54 @@ model_params = {
         "max": 1.0,
         "step": 0.05,
     },
+    "mating_energy_buffer": {
+        "type": "SliderFloat",
+        "value": 0.05,
+        "label": "Energy buffer reproduction cost",
+        "min": 0.0,
+        "max": 0.5,
+        "step": 0.01,
+    },
+    "male_ornament_cost_coeff": {
+        "type": "SliderFloat",
+        "value": 0.006,
+        "label": "Male ornament cost",
+        "min": 0.0,
+        "max": 0.08,
+        "step": 0.001,
+    },
+    "max_age": {
+        "type": "SliderInt",
+        "value": 200,
+        "label": "Hard max age",
+        "min": 80,
+        "max": 500,
+        "step": 5,
+    },
+    "mortality_start_age": {
+        "type": "SliderInt",
+        "value": 100,
+        "label": "Age when mortality starts",
+        "min": 20,
+        "max": 250,
+        "step": 5,
+    },
+    "initial_energy": {
+        "type": "SliderFloat",
+        "value": 0.85,
+        "label": "Starting energy per agent",
+        "min": 0.2,
+        "max": 1.8,
+        "step": 0.05,
+    },
+    "eat_radius": {
+        "type": "SliderFloat",
+        "value": 0.028,
+        "label": "Food pickup radius",
+        "min": 0.01,
+        "max": 0.08,
+        "step": 0.002,
+    },
 
     # Population & Environment
     "population_size": {
@@ -74,10 +130,18 @@ model_params = {
     },
     "food_regrowth_per_step": {
         "type": "SliderInt",
-        "value": 3,
+        "value": 5,
         "label": "Food Regrowth Rate",
         "min": 0,
         "max": 50,
         "step": 1,
+    },
+    "mate_perception_radius": {
+        "type": "SliderFloat",
+        "value": 0.15,
+        "label": "Female mate perception radius",
+        "min": 0.02,
+        "max": 0.5,
+        "step": 0.01,
     },
 }
