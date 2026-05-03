@@ -7,6 +7,8 @@ from mesa.visualization.components import make_altair_plot_component
 import numpy as np
 from config import model_params
 
+alt.data_transformers.disable_max_rows()
+
 
 def _tooltip_common_traits():
     """Fields shown for every agent in the map tooltip."""
@@ -82,28 +84,31 @@ def agent_map_component(model: ReproductionModel):
     if df_agents.empty and df_food.empty:
         return solara.Text("No agents to display")
 
+    color_scale = alt.Scale(
+        domain=["Male", "Female", "Food"],
+        range=["#4c78a8", "#e45756", "#2ca02c"],
+    )
+    _fixed = alt.Scale(domain=[0, 1], padding=10, nice=False, clamp=True)
+    color_enc = alt.Color("category:N", title="Legend", scale=color_scale)
+    x_enc = alt.X("x:Q", scale=_fixed, axis=alt.Axis(title="X"))
+    y_enc = alt.Y("y:Q", scale=_fixed, axis=alt.Axis(title="Y"))
+
     charts = []
 
     if not df_food.empty:
-        food_chart = (
+        df_food = df_food.copy()
+        df_food["category"] = "Food"
+        charts.append(
             alt.Chart(df_food)
-            .mark_square(size=50, opacity=0.7, color="green")
-            .encode(
-                x=alt.X("x:Q", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(title="X")),
-                y=alt.Y("y:Q", scale=alt.Scale(domain=[0, 1]), axis=alt.Axis(title="Y")),
-                tooltip=["energy:Q"],
-            )
+            .mark_square(size=50, opacity=0.7)
+            .encode(x=x_enc, y=y_enc, color=color_enc, tooltip=["energy:Q"])
         )
-        charts.append(food_chart)
 
     if not df_agents.empty:
-        sex_scale = alt.Scale(domain=["Male", "Female"])
-        x_enc = alt.X("x:Q", scale=alt.Scale(domain=[0, 1], padding=10), axis=alt.Axis(title="X"))
-        y_enc = alt.Y("y:Q", scale=alt.Scale(domain=[0, 1], padding=10), axis=alt.Axis(title="Y"))
-        color_enc = alt.Color("sex:N", title="Gender", scale=sex_scale)
-
-        male_df = df_agents[df_agents["sex"] == "Male"]
-        female_df = df_agents[df_agents["sex"] == "Female"]
+        male_df = df_agents[df_agents["sex"] == "Male"].copy()
+        female_df = df_agents[df_agents["sex"] == "Female"].copy()
+        male_df["category"] = "Male"
+        female_df["category"] = "Female"
 
         agent_layers = []
         if not male_df.empty:
@@ -152,62 +157,36 @@ def model_params_component(model: ReproductionModel):
             items_per_page=30
         )
 
-def safe_altair_component(m, cols, width=720, height=380):
-    def _size(chart):
-        return chart.properties(width=width, height=height)
-
-    return make_altair_plot_component(cols, post_process=_size)[0](m)
+_FULL_CARD = {"width": "100%", "boxSizing": "border-box"}
+_W, _H = 1100, 380
 
 
-_CARD_FLEX = {"flex": "1 1 380px", "minWidth": "min(100%, 300px)", "maxWidth": "100%"}
-_TRAITS_CARD_FLEX = {"flex": "2 1 560px", "minWidth": "min(100%, 420px)", "maxWidth": "100%"}
-_ROW_STYLE = {
-    "display": "flex",
-    "flexWrap": "wrap",
-    "gap": "16px",
-    "width": "100%",
-    "alignItems": "stretch",
-    "justifyContent": "stretch",
-}
+def _chart_card(m, title, cols, height=_H):
+    with solara.Card(title, style=_FULL_CARD):
+        def _size(chart):
+            return chart.properties(width=_W, height=height)
+        df = m.datacollector.get_model_vars_dataframe()
+        if not df.empty:
+            make_altair_plot_component(cols, post_process=_size)[0](m)
+        else:
+            solara.Text("Waiting for data...")
 
 
 @solara.component
 def dashboard(m):
-    with solara.Column(style={"width": "100%", "boxSizing": "border-box", "padding": "8px"}):
-        with solara.Row(style=_ROW_STYLE):
-            with solara.Card("Evolutionary Traits", style=_TRAITS_CARD_FLEX):
-                df = m.datacollector.get_model_vars_dataframe()
-                if not df.empty:
-                    trait_cols = [
-                        c
-                        for c in df.columns
-                        if c.startswith(
-                            (
-                                "Mean_Male_Trait_",
-                                "Mean_Female_Trait_",
-                                "Var_Male_Trait_",
-                                "Var_Female_Trait_",
-                                "Mean_Female_Pref_",
-                            )
-                        )
-                    ]
-                    safe_altair_component(m, trait_cols, width=1100, height=420)
-                else:
-                    solara.Text("Waiting for data...")
-
-            with solara.Card("Population Metrics", style=_CARD_FLEX):
-                df = m.datacollector.get_model_vars_dataframe()
-                if not df.empty:
-                    safe_altair_component(m, ["Population_Count", "Avg_Age"], width=1100, height=420)
-                else:
-                    solara.Text("Waiting for data...")
-
-            with solara.Card("Environment & Food", style=_CARD_FLEX):
-                df = m.datacollector.get_model_vars_dataframe()
-                if not df.empty:
-                    safe_altair_component(m, ["Total_Food"], width=1100, height=420)
-                else:
-                    solara.Text("Waiting for data...")
+    with solara.Column(style={"width": "100%", "boxSizing": "border-box", "padding": "8px", "gap": "16px"}):
+        _chart_card(m, "Male Traits (mean)",
+                    [f"Mean_Male_Trait_{i+1}" for i in range(m.trait_dim)])
+        _chart_card(m, "Female Traits (mean)",
+                    [f"Mean_Female_Trait_{i+1}" for i in range(m.trait_dim)])
+        _chart_card(m, "Female Mate Preferences (mean)",
+                    [f"Mean_Female_Pref_{i+1}" for i in range(m.trait_dim)])
+        _chart_card(m, "Trait–Preference Alignment (gap → 0 = coevolution)",
+                    [f"Trait_Pref_Gap_{i+1}" for i in range(m.trait_dim)])
+        _chart_card(m, "Sex Ratio", ["Male_Count", "Female_Count"])
+        _chart_card(m, "Mean Energy by Sex", ["Mean_Male_Energy", "Mean_Female_Energy"])
+        _chart_card(m, "Population Metrics", ["Population_Count", "Avg_Age"])
+        _chart_card(m, "Environment & Food", ["Total_Food"])
 
 @solara.component
 def Page():

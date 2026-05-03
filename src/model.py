@@ -11,6 +11,7 @@ class ReproductionModel(Model):
                  trait_dim=3,
                  mutation_std=0.05,
                  n_food=30,
+                 max_food=150,
                  move_cost=0.01,
                  food_energy=0.4,
                  female_reproduction_cost=0.7,
@@ -76,32 +77,26 @@ class ReproductionModel(Model):
             self.space.place_agent(agent, pos)
             self.individuals.append(agent)
 
-        def _male_mean(i):
-            return lambda m: m.mean_trait_male(i)
-
-        def _female_mean(i):
-            return lambda m: m.mean_trait_female(i)
-
-        def _male_var(i):
-            return lambda m: m.var_trait_male(i)
-
-        def _female_var(i):
-            return lambda m: m.var_trait_female(i)
-
-        def _female_pref_mean(i):
-            return lambda m: m.mean_preference_female(i)
+        def _c(key):
+            return lambda m: m._stat_cache.get(key, 0.0)
 
         reporters = {
-            **{f"Mean_Male_Trait_{i+1}": _male_mean(i) for i in range(self.trait_dim)},
-            **{f"Mean_Female_Trait_{i+1}": _female_mean(i) for i in range(self.trait_dim)},
-            **{f"Var_Male_Trait_{i+1}": _male_var(i) for i in range(self.trait_dim)},
-            **{f"Var_Female_Trait_{i+1}": _female_var(i) for i in range(self.trait_dim)},
-            **{f"Mean_Female_Pref_{i+1}": _female_pref_mean(i) for i in range(self.trait_dim)},
-            "Avg_Age": lambda m: np.mean([a.age for a in m.individuals]) if m.individuals else 0,
-            "Population_Count": lambda m: len(m.individuals),
-            "Total_Food": lambda m: len(m.food),
+            **{f"Mean_Male_Trait_{i+1}": _c(f"mean_male_trait_{i}") for i in range(self.trait_dim)},
+            **{f"Mean_Female_Trait_{i+1}": _c(f"mean_female_trait_{i}") for i in range(self.trait_dim)},
+            **{f"Var_Male_Trait_{i+1}": _c(f"var_male_trait_{i}") for i in range(self.trait_dim)},
+            **{f"Var_Female_Trait_{i+1}": _c(f"var_female_trait_{i}") for i in range(self.trait_dim)},
+            **{f"Mean_Female_Pref_{i+1}": _c(f"mean_female_pref_{i}") for i in range(self.trait_dim)},
+            **{f"Trait_Pref_Gap_{i+1}": _c(f"trait_pref_gap_{i}") for i in range(self.trait_dim)},
+            "Male_Count": _c("male_count"),
+            "Female_Count": _c("female_count"),
+            "Mean_Male_Energy": _c("mean_male_energy"),
+            "Mean_Female_Energy": _c("mean_female_energy"),
+            "Avg_Age": _c("avg_age"),
+            "Population_Count": _c("population_count"),
+            "Total_Food": _c("total_food"),
         }
 
+        self._stat_cache: dict = {}
         self.datacollector = DataCollector(model_reporters=reporters)
 
     def _energy_reserve_threshold(self, agent):
@@ -151,6 +146,11 @@ class ReproductionModel(Model):
             return 0.0
         return float(np.mean([a.preferences[index] for a in females]))
 
+    def trait_pref_gap(self, index):
+        """Absolute difference between mean male trait and mean female preference for that trait.
+        Decreasing gap over time signals coevolutionary alignment (runaway selection)."""
+        return abs(self.mean_trait_male(index) - self.mean_preference_female(index))
+
     def _age_mortality_probability(self, age):
         """Per-step death probability from age alone; 0 below mortality_start_age,
         linear from 0 to almost 1 between mortality_start_age and max_age (exclusive)."""
@@ -173,6 +173,15 @@ class ReproductionModel(Model):
             d = d.copy()
             d[0] -= w * np.rint(d[0] / w)
             d[1] -= h * np.rint(d[1] / h)
+        return d
+
+    def _torus_delta_vec(self, from_pos, to_positions):
+        """Vectorized torus displacement: from_pos (2,) → to_positions (N, 2) → (N, 2)."""
+        d = to_positions - from_pos
+        if self.space.torus:
+            w, h = self.space.width, self.space.height
+            d[:, 0] -= w * np.rint(d[:, 0] / w)
+            d[:, 1] -= h * np.rint(d[:, 1] / h)
         return d
 
     def _torus_distance(self, a, b):
@@ -199,31 +208,41 @@ class ReproductionModel(Model):
     # -----------------------
 
     def step(self):
-
         survivors = []
         children = []
 
-        for agent in self.individuals:
+        if self.food:
+            food_xy = np.array([[f["x"], f["y"]] for f in self.food], dtype=float)
+            food_energies = np.array([f["energy"] for f in self.food], dtype=float)
+            food_alive = np.ones(len(self.food), dtype=bool)
+        else:
+            food_xy = np.empty((0, 2), dtype=float)
+            food_energies = np.empty(0, dtype=float)
+            food_alive = np.empty(0, dtype=bool)
 
+        for agent in self.individuals:
             if agent.pos is None:
                 continue
 
             self._update_agent_energy_and_age(agent)
 
             pos = np.array(agent.pos, dtype=float)
-            step_vec = self._compute_movement(agent)
+            step_vec = self._compute_movement(agent, food_xy, food_alive)
             new_pos = pos + step_vec
             self.space.move_agent(agent, (float(new_pos[0]), float(new_pos[1])))
             new_pos = np.array(agent.pos, dtype=float)
             agent.energy -= self.move_cost
 
-            self._handle_eating(agent, new_pos)
+            self._handle_eating(agent, new_pos, food_xy, food_energies, food_alive)
 
             if agent.sex == "Male" and self.male_ornament_cost_coeff > 0:
                 cost = self.male_ornament_cost_coeff * float(np.linalg.norm(agent.traits))
                 agent.energy = max(0.0, agent.energy - cost)
 
             self._handle_death(agent, survivors, new_pos)
+
+        if food_alive.size > 0 and not np.all(food_alive):
+            self.food = [f for f, alive in zip(self.food, food_alive) if alive]
 
         self.individuals = survivors
 
@@ -246,6 +265,7 @@ class ReproductionModel(Model):
 
         self._regrow_food()
 
+        self._collect_stats()
         self.datacollector.collect(self)
 
 
@@ -264,29 +284,23 @@ class ReproductionModel(Model):
 
     # ------------------------------------------------------------
 
-    def _compute_movement(self, agent):
+    def _compute_movement(self, agent, food_xy, food_alive):
         pos = np.array(agent.pos, dtype=float)
 
-        # 1) Food seeking — reserve depends on sex (no dead band vs mating)
         if self._needs_food(agent):
-            best_i = None
-            best_d = np.inf
-            for i, f in enumerate(self.food):
-                d = self._torus_distance(pos, (f["x"], f["y"]))
-                if d < best_d:
-                    best_d = d
-                    best_i = i
-            if best_i is None:
+            alive_idx = np.where(food_alive)[0]
+            if alive_idx.size == 0:
                 return np.random.normal(0, self.random_step_std, 2)
-            direction = self._torus_delta(pos, (self.food[best_i]["x"], self.food[best_i]["y"]))
-            dist = float(np.linalg.norm(direction))
+            diffs = self._torus_delta_vec(pos, food_xy[alive_idx])
+            dists = np.linalg.norm(diffs, axis=1)
+            best = int(np.argmin(dists))
+            direction = diffs[best]
+            dist = float(dists[best])
             if dist > 0:
                 return direction / dist * self.step_towards_food
             return np.zeros(2)
 
-        # 2) Female mate seeking — only when reserves allow reproduction; males in perception radius
         if self._female_seeks_mate(agent):
-
             candidate_males = [
                 m
                 for m in self.individuals
@@ -294,7 +308,6 @@ class ReproductionModel(Model):
                 and m.pos is not None
                 and self._torus_distance(pos, m.pos) <= self.mate_perception_radius
             ]
-
             if candidate_males:
                 target_male = self._best_preferred_male(agent, candidate_males, pos)
                 if target_male is None:
@@ -304,7 +317,6 @@ class ReproductionModel(Model):
                 if dist > 0:
                     return direction / dist * self.step_towards_mate
                 return np.zeros(2)
-
             return np.random.normal(0, self.random_step_std, 2)
 
         return np.random.normal(0, self.random_step_std, 2)
@@ -312,18 +324,18 @@ class ReproductionModel(Model):
 
     # ------------------------------------------------------------
 
-    def _handle_eating(self, agent, new_pos):
-        eaten_indices = []
-
-        for i, food in enumerate(self.food):
-            fx, fy = food["x"], food["y"]
-
-            if self._torus_distance(new_pos, (fx, fy)) <= self.eat_radius:
-                agent.energy = min(agent.energy + food["energy"], self.max_energy)
-                eaten_indices.append(i)
-
-        for i in sorted(eaten_indices, reverse=True):
-            del self.food[i]
+    def _handle_eating(self, agent, new_pos, food_xy, food_energies, food_alive):
+        alive_idx = np.where(food_alive)[0]
+        if alive_idx.size == 0:
+            return
+        diffs = self._torus_delta_vec(new_pos, food_xy[alive_idx])
+        dists = np.linalg.norm(diffs, axis=1)
+        eaten_local = np.where(dists <= self.eat_radius)[0]
+        if eaten_local.size == 0:
+            return
+        eaten_global = alive_idx[eaten_local]
+        agent.energy = min(agent.energy + float(food_energies[eaten_global].sum()), self.max_energy)
+        food_alive[eaten_global] = False
 
 
     # ------------------------------------------------------------
@@ -406,10 +418,60 @@ class ReproductionModel(Model):
     # ------------------------------------------------------------
 
     def _regrow_food(self):
-        for _ in range(self.food_regrowth_per_step):
-            fx, fy = np.random.rand(2)
-            self.food.append({
-                "x": float(fx),
-                "y": float(fy),
-                "energy": self.food_energy
-            })
+        if self.food_regrowth_per_step > 0:
+            xys = np.random.rand(self.food_regrowth_per_step, 2)
+            for fx, fy in xys:
+                self.food.append({"x": float(fx), "y": float(fy), "energy": self.food_energy})
+
+    # ------------------------------------------------------------
+
+    def _collect_stats(self):
+        """Single pass over individuals to populate _stat_cache for all reporters."""
+        males = [a for a in self.individuals if a.sex == "Male"]
+        females = [a for a in self.individuals if a.sex == "Female"]
+
+        cache: dict = {
+            "male_count": len(males),
+            "female_count": len(females),
+            "population_count": len(self.individuals),
+            "total_food": len(self.food),
+            "avg_age": float(np.mean([a.age for a in self.individuals])) if self.individuals else 0.0,
+            "mean_male_energy": float(np.mean([a.energy for a in males])) if males else 0.0,
+            "mean_female_energy": float(np.mean([a.energy for a in females])) if females else 0.0,
+        }
+
+        if males:
+            male_traits = np.array([a.traits for a in males])
+            for i in range(self.trait_dim):
+                cache[f"mean_male_trait_{i}"] = float(np.mean(male_traits[:, i]))
+                cache[f"var_male_trait_{i}"] = float(np.var(male_traits[:, i])) if len(males) >= 2 else 0.0
+        else:
+            for i in range(self.trait_dim):
+                cache[f"mean_male_trait_{i}"] = 0.0
+                cache[f"var_male_trait_{i}"] = 0.0
+
+        if females:
+            female_traits = np.array([a.traits for a in females])
+            for i in range(self.trait_dim):
+                cache[f"mean_female_trait_{i}"] = float(np.mean(female_traits[:, i]))
+                cache[f"var_female_trait_{i}"] = float(np.var(female_traits[:, i])) if len(females) >= 2 else 0.0
+            pref_females = [a for a in females if a.preferences is not None]
+            if pref_females:
+                prefs = np.array([a.preferences for a in pref_females])
+                for i in range(self.trait_dim):
+                    cache[f"mean_female_pref_{i}"] = float(np.mean(prefs[:, i]))
+            else:
+                for i in range(self.trait_dim):
+                    cache[f"mean_female_pref_{i}"] = 0.0
+        else:
+            for i in range(self.trait_dim):
+                cache[f"mean_female_trait_{i}"] = 0.0
+                cache[f"var_female_trait_{i}"] = 0.0
+                cache[f"mean_female_pref_{i}"] = 0.0
+
+        for i in range(self.trait_dim):
+            cache[f"trait_pref_gap_{i}"] = abs(
+                cache[f"mean_male_trait_{i}"] - cache[f"mean_female_pref_{i}"]
+            )
+
+        self._stat_cache = cache

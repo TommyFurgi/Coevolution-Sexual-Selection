@@ -130,7 +130,7 @@ model_params = {
     },
     "food_regrowth_per_step": {
         "type": "SliderInt",
-        "value": 5,
+        "value": 8,
         "label": "Food Regrowth Rate",
         "min": 0,
         "max": 50,
