@@ -24,7 +24,7 @@ class ReproductionModel(Model):
                  mortality_start_age=100,
                  initial_energy=0.85,
                  eat_radius=0.028,
-                 trait_precision_decimals=4,
+                 trait_precision_decimals=3,
                  **kwargs):
         
         super().__init__()

@@ -10,23 +10,17 @@ from config import model_params
 alt.data_transformers.disable_max_rows()
 
 
-def _tooltip_common_traits():
+def _tooltip_common_traits(trait_dim: int):
     """Fields shown for every agent in the map tooltip."""
-    return [
-        "sex:N",
-        "energy:Q",
-        "age:Q",
-        "trait_1:Q",
-        "trait_2:Q",
-        "trait_3:Q",
-    ]
+    return ["sex:N", "energy:Q", "age:Q"] + [f"trait_{i+1}:Q" for i in range(trait_dim)]
 
 
-def _tooltip_female_prefs():
+def _tooltip_female_prefs(trait_dim: int):
     """Preferences only in tooltip for females (males use a separate chart layer)."""
-    return _tooltip_common_traits() + ["pref_1:Q", "pref_2:Q", "pref_3:Q"]
+    return _tooltip_common_traits(trait_dim) + [f"pref_{i+1}:Q" for i in range(trait_dim)]
 
 def _agent_records(model: ReproductionModel) -> pd.DataFrame:
+    trait_dim = int(getattr(model, "trait_dim", 3))
     rows = []
     for a in getattr(model, "individuals", []):
         if a.pos is None:
@@ -34,37 +28,22 @@ def _agent_records(model: ReproductionModel) -> pd.DataFrame:
         x, y = a.pos
         traits = list(a.traits)
         prefs = list(a.preferences) if a.preferences is not None else [None] * len(traits)
-        rows.append(
-            {
-                "x": float(x),
-                "y": float(y),
-                "sex": a.sex,
-                "energy": float(getattr(a, "energy", 0.0)),
-                "age": float(getattr(a, "age", 0.0)),
-                "trait_1": traits[0],
-                "trait_2": traits[1] if len(traits) > 1 else np.nan,
-                "trait_3": traits[2] if len(traits) > 2 else np.nan,
-                "pref_1": prefs[0] if len(prefs) > 0 else np.nan,
-                "pref_2": prefs[1] if len(prefs) > 1 else np.nan,
-                "pref_3": prefs[2] if len(prefs) > 2 else np.nan,
-            }
-        )
+        row = {
+            "x": float(x),
+            "y": float(y),
+            "sex": a.sex,
+            "energy": float(getattr(a, "energy", 0.0)),
+            "age": float(getattr(a, "age", 0.0)),
+        }
+        for i in range(trait_dim):
+            row[f"trait_{i+1}"] = traits[i] if len(traits) > i else np.nan
+            row[f"pref_{i+1}"] = prefs[i] if len(prefs) > i else np.nan
+        rows.append(row)
     if not rows:
-        return pd.DataFrame(
-            columns=[
-                "x",
-                "y",
-                "sex",
-                "age",
-                "energy",
-                "trait_1",
-                "trait_2",
-                "trait_3",
-                "pref_1",
-                "pref_2",
-                "pref_3",
-            ]
-        )
+        columns = ["x", "y", "sex", "age", "energy"]
+        columns += [f"trait_{i+1}" for i in range(trait_dim)]
+        columns += [f"pref_{i+1}" for i in range(trait_dim)]
+        return pd.DataFrame(columns=columns)
     return pd.DataFrame(rows)
 
 
@@ -119,7 +98,7 @@ def agent_map_component(model: ReproductionModel):
                     x=x_enc,
                     y=y_enc,
                     color=color_enc,
-                    tooltip=_tooltip_common_traits(),
+                    tooltip=_tooltip_common_traits(model.trait_dim),
                 )
             )
         if not female_df.empty:
@@ -130,7 +109,7 @@ def agent_map_component(model: ReproductionModel):
                     x=x_enc,
                     y=y_enc,
                     color=color_enc,
-                    tooltip=_tooltip_female_prefs(),
+                    tooltip=_tooltip_female_prefs(model.trait_dim),
                 )
             )
         if agent_layers:

@@ -1,117 +1,7 @@
 import solara
 
 model_params = {
-    # Evolution Parameters
-    "mutation_std": {
-        "type": "SliderFloat",
-        "value": 0.05,
-        "label": "Mutation Rate (Std Dev)",
-        "min": 0.0,
-        "max": 0.3,
-        "step": 0.01,
-    },
-    "trait_dim": {
-        "type": "SliderInt",
-        "value": 3,
-        "label": "Trait Dimensions",
-        "min": 1,
-        "max": 10,
-        "step": 1,
-    },
-    "trait_precision_decimals": {
-        "type": "SliderInt",
-        "value": 5,
-        "label": "Trait / preference decimal places",
-        "min": 0,
-        "max": 8,
-        "step": 1,
-    },
-
-    # Energy Economy
-    "move_cost": {
-        "type": "SliderFloat",
-        "value": 0.006,
-        "label": "Movement Energy Cost",
-        "min": 0.0,
-        "max": 0.1,
-        "step": 0.001,
-    },
-    "food_energy": {
-        "type": "SliderFloat",
-        "value": 0.4,
-        "label": "Energy per Food Unit",
-        "min": 0.1,
-        "max": 2.0,
-        "step": 0.05,
-    },
-
-    # Reproduction
-    "female_reproduction_cost": {
-        "type": "SliderFloat",
-        "value": 0.7,
-        "label": "Female Reproduction Cost",
-        "min": 0.1,
-        "max": 1.5,
-        "step": 0.05,
-    },
-    "male_reproduction_cost": {
-        "type": "SliderFloat",
-        "value": 0.15,
-        "label": "Male Reproduction Cost",
-        "min": 0.0,
-        "max": 1.0,
-        "step": 0.05,
-    },
-    "mating_energy_buffer": {
-        "type": "SliderFloat",
-        "value": 0.05,
-        "label": "Energy buffer reproduction cost",
-        "min": 0.0,
-        "max": 0.5,
-        "step": 0.01,
-    },
-    "male_ornament_cost_coeff": {
-        "type": "SliderFloat",
-        "value": 0.006,
-        "label": "Male ornament cost",
-        "min": 0.0,
-        "max": 0.08,
-        "step": 0.001,
-    },
-    "max_age": {
-        "type": "SliderInt",
-        "value": 200,
-        "label": "Hard max age",
-        "min": 80,
-        "max": 500,
-        "step": 5,
-    },
-    "mortality_start_age": {
-        "type": "SliderInt",
-        "value": 100,
-        "label": "Age when mortality starts",
-        "min": 20,
-        "max": 250,
-        "step": 5,
-    },
-    "initial_energy": {
-        "type": "SliderFloat",
-        "value": 0.85,
-        "label": "Starting energy per agent",
-        "min": 0.2,
-        "max": 1.8,
-        "step": 0.05,
-    },
-    "eat_radius": {
-        "type": "SliderFloat",
-        "value": 0.028,
-        "label": "Food pickup radius",
-        "min": 0.01,
-        "max": 0.08,
-        "step": 0.002,
-    },
-
-    # Population & Environment
+    # Core setup (most frequently tuned)
     "population_size": {
         "type": "SliderInt",
         "value": 50,
@@ -136,6 +26,68 @@ model_params = {
         "max": 50,
         "step": 1,
     },
+    "initial_energy": {
+        "type": "SliderFloat",
+        "value": 0.85,
+        "label": "Starting energy per agent",
+        "min": 0.2,
+        "max": 1.8,
+        "step": 0.05,
+    },
+
+    # Evolution dynamics
+    "trait_dim": {
+        "type": "SliderInt",
+        "value": 3,
+        "label": "Trait Dimensions",
+        "min": 1,
+        "max": 10,
+        "step": 1,
+    },
+    "mutation_std": {
+        "type": "SliderFloat",
+        "value": 0.05,
+        "label": "Mutation Rate (Std Dev)",
+        "min": 0.0,
+        "max": 0.3,
+        "step": 0.01,
+    },
+    "trait_precision_decimals": {
+        "type": "SliderInt",
+        "value": 3,
+        "label": "Trait / preference decimal places",
+        "min": 0,
+        "max": 8,
+        "step": 1,
+    },
+
+    # Mobility and foraging
+    "move_cost": {
+        "type": "SliderFloat",
+        "value": 0.02,
+        "label": "Movement Energy Cost",
+        "min": 0.0,
+        "max": 0.1,
+        "step": 0.001,
+    },
+    "food_energy": {
+        "type": "SliderFloat",
+        "value": 0.5,
+        "label": "Energy per Food Unit",
+        "min": 0.1,
+        "max": 2.0,
+        "step": 0.05,
+    },
+    "eat_radius": {
+        "type": "SliderFloat",
+        "value": 0.028,
+        "label": "Food pickup radius",
+        "min": 0.01,
+        "max": 0.08,
+        "step": 0.002,
+    },
+
+    # Mating and reproduction
     "mate_perception_radius": {
         "type": "SliderFloat",
         "value": 0.15,
@@ -143,5 +95,55 @@ model_params = {
         "min": 0.02,
         "max": 0.5,
         "step": 0.01,
+    },
+    "female_reproduction_cost": {
+        "type": "SliderFloat",
+        "value": 0.7,
+        "label": "Female Reproduction Cost",
+        "min": 0.1,
+        "max": 1.5,
+        "step": 0.05,
+    },
+    "male_reproduction_cost": {
+        "type": "SliderFloat",
+        "value": 0.15,
+        "label": "Male Reproduction Cost",
+        "min": 0.0,
+        "max": 1.0,
+        "step": 0.05,
+    },
+    "mating_energy_buffer": {
+        "type": "SliderFloat",
+        "value": 0.1,
+        "label": "Energy buffer reproduction cost",
+        "min": 0.0,
+        "max": 0.5,
+        "step": 0.01,
+    },
+    "male_ornament_cost_coeff": {
+        "type": "SliderFloat",
+        "value": 0.006,
+        "label": "Male ornament cost",
+        "min": 0.0,
+        "max": 0.08,
+        "step": 0.001,
+    },
+
+    # Lifespan and mortality
+    "mortality_start_age": {
+        "type": "SliderInt",
+        "value": 100,
+        "label": "Age when mortality starts",
+        "min": 20,
+        "max": 250,
+        "step": 5,
+    },
+    "max_age": {
+        "type": "SliderInt",
+        "value": 200,
+        "label": "Hard max age",
+        "min": 80,
+        "max": 500,
+        "step": 5,
     },
 }
