@@ -12,7 +12,7 @@ model_params = {
     },
     "n_food": {
         "type": "SliderInt",
-        "value": 30,
+        "value": 20,
         "label": "Initial Food Count",
         "min": 0,
         "max": 200,
@@ -64,11 +64,11 @@ model_params = {
     # Mobility and foraging
     "move_cost": {
         "type": "SliderFloat",
-        "value": 0.02,
+        "value": 0.04,
         "label": "Movement Energy Cost",
         "min": 0.0,
         "max": 0.1,
-        "step": 0.001,
+        "step": 0.01,
     },
     "food_energy": {
         "type": "SliderFloat",
@@ -90,7 +90,7 @@ model_params = {
     # Mating and reproduction
     "mate_perception_radius": {
         "type": "SliderFloat",
-        "value": 0.15,
+        "value": 0.3,
         "label": "Female mate perception radius",
         "min": 0.02,
         "max": 0.5,
@@ -114,7 +114,7 @@ model_params = {
     },
     "mating_energy_buffer": {
         "type": "SliderFloat",
-        "value": 0.1,
+        "value": 0.2,
         "label": "Energy buffer reproduction cost",
         "min": 0.0,
         "max": 0.5,
@@ -122,11 +122,11 @@ model_params = {
     },
     "male_ornament_cost_coeff": {
         "type": "SliderFloat",
-        "value": 0.006,
+        "value": 0.02,
         "label": "Male ornament cost",
         "min": 0.0,
-        "max": 0.08,
-        "step": 0.001,
+        "max": 0.1,
+        "step": 0.01,
     },
 
     # Lifespan and mortality
@@ -145,5 +145,33 @@ model_params = {
         "min": 80,
         "max": 500,
         "step": 5,
+    },
+
+    "max_simulation_steps": {
+        "type": "SliderInt",
+        "value": 2000,
+        "label": "Max steps",
+        "min": 0,
+        "max": 10000,
+        "step": 1,
+    },
+
+    "csv_export_enabled": {
+        "type": "Checkbox",
+        "value": False,
+        "label": "Save results",
+    },
+    "csv_export_dir": {
+        "type": "InputText",
+        "value": "runs",
+        "label": "Results directory",
+    },
+    "csv_flush_every": {
+        "type": "SliderInt",
+        "value": 100,
+        "label": "Save flush",
+        "min": 1,
+        "max": 500,
+        "step": 1,
     },
 }

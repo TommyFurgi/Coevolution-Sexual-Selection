@@ -1,3 +1,9 @@
+import csv
+import json
+import uuid
+from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 from mesa import Model
 from mesa.datacollection import DataCollector
@@ -25,6 +31,10 @@ class ReproductionModel(Model):
                  initial_energy=0.85,
                  eat_radius=0.028,
                  trait_precision_decimals=3,
+                 csv_export_enabled=False,
+                 csv_export_dir="runs",
+                 csv_flush_every=20,
+                 max_simulation_steps=0,
                  **kwargs):
         
         super().__init__()
@@ -45,6 +55,18 @@ class ReproductionModel(Model):
         self.initial_energy = initial_energy
         self.eat_radius = eat_radius
         self.trait_precision_decimals = max(0, int(trait_precision_decimals))
+        self.csv_export_enabled = bool(csv_export_enabled)
+        self.csv_export_dir = str(csv_export_dir).strip() or "runs"
+        self.csv_flush_every = max(1, int(csv_flush_every))
+        self.max_simulation_steps = max(0, int(max_simulation_steps))
+
+        self._csv_metrics_fp = None
+        self._csv_writer = None
+        self._csv_metric_keys: list[str] = []
+        self._csv_run_dir: Path | None = None
+        self._csv_rows_since_flush = 0
+        self._csv_export_finalized = False
+        self.initial_food_count = int(n_food)
 
         self.max_energy = 2.0
         self.step_towards_food = 0.03
@@ -98,6 +120,124 @@ class ReproductionModel(Model):
 
         self._stat_cache: dict = {}
         self.datacollector = DataCollector(model_reporters=reporters)
+
+        if self.csv_export_enabled:
+            self._start_csv_export()
+
+    def _project_root(self) -> Path:
+        return Path(__file__).resolve().parent.parent
+
+    def _csv_run_config_payload(self) -> dict:
+        keys = (
+            "population_size",
+            "trait_dim",
+            "mutation_std",
+            "initial_food_count",
+            "food_regrowth_per_step",
+            "initial_energy",
+            "move_cost",
+            "food_energy",
+            "eat_radius",
+            "mate_perception_radius",
+            "female_reproduction_cost",
+            "male_reproduction_cost",
+            "mating_energy_buffer",
+            "male_ornament_cost_coeff",
+            "mortality_start_age",
+            "max_age",
+            "trait_precision_decimals",
+            "csv_export_enabled",
+            "csv_export_dir",
+            "csv_flush_every",
+            "max_simulation_steps",
+        )
+        cfg = {k: getattr(self, k, None) for k in keys}
+        cfg["run_started_utc"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        if getattr(self, "_seed", None) is not None:
+            cfg["random_seed"] = self._seed
+        return cfg
+
+    def _start_csv_export(self) -> None:
+        base = Path(self.csv_export_dir).expanduser()
+        if not base.is_absolute():
+            base = self._project_root() / base
+        run_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        run_dir = base / run_name
+        run_dir.mkdir(parents=True, exist_ok=False)
+        self._csv_run_dir = run_dir
+        self._csv_export_finalized = False
+
+        config_path = run_dir / "run_config.json"
+        with config_path.open("w", encoding="utf-8") as f:
+            json.dump(self._csv_run_config_payload(), f, indent=2, allow_nan=False)
+
+        metrics_path = run_dir / "metrics.csv"
+        self._csv_metric_keys = list(self.datacollector.model_reporters.keys())
+        self._csv_metrics_fp = metrics_path.open(
+            "w",
+            encoding="utf-8",
+            newline="",
+            buffering=1,
+        )
+        self._csv_writer = csv.writer(self._csv_metrics_fp)
+        header = ["Step", "Time"] + self._csv_metric_keys
+        self._csv_writer.writerow(header)
+
+        self._collect_stats()
+        self.datacollector.collect(self)
+        self._csv_append_metrics_row()
+
+    def _csv_append_metrics_row(self) -> None:
+        if self._csv_metrics_fp is None or self._csv_writer is None:
+            return
+        mv = self.datacollector.model_vars
+        row = [self.steps, self.time] + [mv[k][-1] for k in self._csv_metric_keys]
+        self._csv_writer.writerow(row)
+        self._csv_rows_since_flush += 1
+        if self._csv_rows_since_flush >= self.csv_flush_every:
+            try:
+                self._csv_metrics_fp.flush()
+            except OSError:
+                pass
+            self._csv_rows_since_flush = 0
+
+    def _csv_close(self) -> None:
+        if self._csv_metrics_fp is not None:
+            try:
+                self._csv_metrics_fp.flush()
+            finally:
+                self._csv_metrics_fp.close()
+            self._csv_metrics_fp = None
+            self._csv_writer = None
+
+    def _csv_export_on_run_end(self, reason: str) -> None:
+        if self._csv_export_finalized or not self.csv_export_enabled:
+            return
+        self._csv_export_finalized = True
+        self._csv_close()
+        if self._csv_run_dir is None:
+            return
+        payload = {
+            "stopped_reason": reason,
+            "final_step": self.steps,
+            "final_time": self.time,
+            "population_count": len(self.individuals),
+            "finished_utc": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        }
+        try:
+            (self._csv_run_dir / "run_finished.json").write_text(
+                json.dumps(payload, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+    def __del__(self):
+        try:
+            if self.csv_export_enabled and not self._csv_export_finalized:
+                self._csv_close()
+        except Exception:
+            pass
 
     def _energy_reserve_threshold(self, agent):
         """Below this energy (for sex), agent prioritizes foraging over mating."""
@@ -267,6 +407,16 @@ class ReproductionModel(Model):
 
         self._collect_stats()
         self.datacollector.collect(self)
+        self._csv_append_metrics_row()
+
+        if not self.individuals:
+            self._csv_export_on_run_end("extinction")
+            self.running = False
+            return
+
+        if self.max_simulation_steps and self.steps >= self.max_simulation_steps:
+            self._csv_export_on_run_end("max_simulation_steps")
+            self.running = False
 
 
 # ============================================================
