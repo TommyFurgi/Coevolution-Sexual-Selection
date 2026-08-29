@@ -14,6 +14,6 @@ class Individual(Agent):
             else np.round(np.asarray(preferences, dtype=float), decimals)
         )
         self.energy = getattr(model, "initial_energy", 1.0)
-        self.age = 0
+        self.age = int(model.random.randint(0, 100))
         self.reproduction_cooldown = 0
 

@@ -1,15 +1,41 @@
 import solara
 
 model_params = {
-    # Evolution Parameters
-    "mutation_std": {
-        "type": "SliderFloat",
-        "value": 0.05,
-        "label": "Mutation Rate (Std Dev)",
-        "min": 0.0,
-        "max": 0.3,
-        "step": 0.01,
+    # Core setup (most frequently tuned)
+    "population_size": {
+        "type": "SliderInt",
+        "value": 50,
+        "label": "Initial Population Size",
+        "min": 2,
+        "max": 300,
+        "step": 2,
     },
+    "n_food": {
+        "type": "SliderInt",
+        "value": 20,
+        "label": "Initial Food Count",
+        "min": 0,
+        "max": 200,
+        "step": 5,
+    },
+    "food_regrowth_per_step": {
+        "type": "SliderInt",
+        "value": 8,
+        "label": "Food Regrowth Rate",
+        "min": 0,
+        "max": 50,
+        "step": 1,
+    },
+    "initial_energy": {
+        "type": "SliderFloat",
+        "value": 0.85,
+        "label": "Starting energy per agent",
+        "min": 0.2,
+        "max": 1.8,
+        "step": 0.05,
+    },
+
+    # Evolution dynamics
     "trait_dim": {
         "type": "SliderInt",
         "value": 3,
@@ -18,34 +44,58 @@ model_params = {
         "max": 10,
         "step": 1,
     },
+    "mutation_std": {
+        "type": "SliderFloat",
+        "value": 0.05,
+        "label": "Mutation Rate (Std Dev)",
+        "min": 0.0,
+        "max": 0.3,
+        "step": 0.01,
+    },
     "trait_precision_decimals": {
         "type": "SliderInt",
-        "value": 5,
+        "value": 3,
         "label": "Trait / preference decimal places",
         "min": 0,
         "max": 8,
         "step": 1,
     },
 
-    # Energy Economy
+    # Mobility and foraging
     "move_cost": {
         "type": "SliderFloat",
-        "value": 0.006,
+        "value": 0.04,
         "label": "Movement Energy Cost",
         "min": 0.0,
         "max": 0.1,
-        "step": 0.001,
+        "step": 0.01,
     },
     "food_energy": {
         "type": "SliderFloat",
-        "value": 0.4,
+        "value": 0.5,
         "label": "Energy per Food Unit",
         "min": 0.1,
         "max": 2.0,
         "step": 0.05,
     },
+    "eat_radius": {
+        "type": "SliderFloat",
+        "value": 0.028,
+        "label": "Food pickup radius",
+        "min": 0.01,
+        "max": 0.08,
+        "step": 0.002,
+    },
 
-    # Reproduction
+    # Mating and reproduction
+    "mate_perception_radius": {
+        "type": "SliderFloat",
+        "value": 0.3,
+        "label": "Female mate perception radius",
+        "min": 0.02,
+        "max": 0.5,
+        "step": 0.01,
+    },
     "female_reproduction_cost": {
         "type": "SliderFloat",
         "value": 0.7,
@@ -64,7 +114,7 @@ model_params = {
     },
     "mating_energy_buffer": {
         "type": "SliderFloat",
-        "value": 0.05,
+        "value": 0.2,
         "label": "Energy buffer reproduction cost",
         "min": 0.0,
         "max": 0.5,
@@ -72,11 +122,21 @@ model_params = {
     },
     "male_ornament_cost_coeff": {
         "type": "SliderFloat",
-        "value": 0.006,
+        "value": 0.02,
         "label": "Male ornament cost",
         "min": 0.0,
-        "max": 0.08,
-        "step": 0.001,
+        "max": 0.1,
+        "step": 0.01,
+    },
+
+    # Lifespan and mortality
+    "mortality_start_age": {
+        "type": "SliderInt",
+        "value": 100,
+        "label": "Age when mortality starts",
+        "min": 20,
+        "max": 250,
+        "step": 5,
     },
     "max_age": {
         "type": "SliderInt",
@@ -86,62 +146,32 @@ model_params = {
         "max": 500,
         "step": 5,
     },
-    "mortality_start_age": {
-        "type": "SliderInt",
-        "value": 100,
-        "label": "Age when mortality starts",
-        "min": 20,
-        "max": 250,
-        "step": 5,
-    },
-    "initial_energy": {
-        "type": "SliderFloat",
-        "value": 0.85,
-        "label": "Starting energy per agent",
-        "min": 0.2,
-        "max": 1.8,
-        "step": 0.05,
-    },
-    "eat_radius": {
-        "type": "SliderFloat",
-        "value": 0.028,
-        "label": "Food pickup radius",
-        "min": 0.01,
-        "max": 0.08,
-        "step": 0.002,
-    },
 
-    # Population & Environment
-    "population_size": {
+    "max_simulation_steps": {
         "type": "SliderInt",
-        "value": 50,
-        "label": "Initial Population Size",
-        "min": 2,
-        "max": 300,
-        "step": 2,
-    },
-    "n_food": {
-        "type": "SliderInt",
-        "value": 30,
-        "label": "Initial Food Count",
+        "value": 2000,
+        "label": "Max steps",
         "min": 0,
-        "max": 200,
-        "step": 5,
-    },
-    "food_regrowth_per_step": {
-        "type": "SliderInt",
-        "value": 8,
-        "label": "Food Regrowth Rate",
-        "min": 0,
-        "max": 50,
+        "max": 10000,
         "step": 1,
     },
-    "mate_perception_radius": {
-        "type": "SliderFloat",
-        "value": 0.15,
-        "label": "Female mate perception radius",
-        "min": 0.02,
-        "max": 0.5,
-        "step": 0.01,
+
+    "csv_export_enabled": {
+        "type": "Checkbox",
+        "value": False,
+        "label": "Save results",
+    },
+    "csv_export_dir": {
+        "type": "InputText",
+        "value": "runs",
+        "label": "Results directory",
+    },
+    "csv_flush_every": {
+        "type": "SliderInt",
+        "value": 100,
+        "label": "Save flush",
+        "min": 1,
+        "max": 500,
+        "step": 1,
     },
 }

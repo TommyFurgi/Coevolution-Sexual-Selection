@@ -1,0 +1,7 @@
+{
+  "stopped_reason": "max_simulation_steps",
+  "final_step": 2000,
+  "final_time": 2000.0,
+  "population_count": 106,
+  "finished_utc": "2026-05-09T19:23:27Z"
+}

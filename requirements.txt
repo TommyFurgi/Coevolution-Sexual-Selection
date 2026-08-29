@@ -4,3 +4,4 @@ matplotlib
 pandas
 solara
 altair
+networkx
