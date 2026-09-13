@@ -2,7 +2,7 @@
 
 An **agent-based model (ABM)** built with the **Mesa** framework and **Solara** visualization. This simulation explores the evolutionary dynamics between male traits and female preferences in a resource-constrained 2D environment.
 
-📄 **[Project report (PDF)](https://github.com/TommyFurgi/Coevolution-Sexual-Selection/releases/latest/download/project-raport.pdf)** — also available on the [Releases](https://github.com/TommyFurgi/Coevolution-Sexual-Selection/releases) page.
+📄 **[Project report (PDF)](https://github.com/TommyFurgi/Coevolution-Sexual-Selection/releases/latest/download/project-raport.pdf)** - also available on the [Releases](https://github.com/TommyFurgi/Coevolution-Sexual-Selection/releases) page.
 
 ![Simulation environment](docs/screenshots/enviroment.png)
 
